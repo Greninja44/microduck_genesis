@@ -1,0 +1,13 @@
+.venv/
+upstream/**/target/
+upstream/**/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+logs/*.csv
+logs/*.log
+checkpoints/*.pt
+checkpoints/*.onnx
+runs/*
+logs/*.csv
+__pycache__/
