@@ -59,3 +59,7 @@ Troubleshooting: under WSL, run the helper scripts normally; they re-exec with
 `/usr/lib/wsl/lib` when needed. If `torch.cuda.is_available()` is false, use
 the CPU smoke path only. Do not treat CPU validation as an RTX throughput or
 memory result.
+
+The completed GPU measurements and limitations are recorded in
+`docs/rl_validation.md`. The first real training run should begin at 256
+environments after reviewing the BAM and reward parity documents.
