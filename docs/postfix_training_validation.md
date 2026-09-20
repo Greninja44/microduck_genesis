@@ -16,3 +16,11 @@ rollouts. Iteration-5 deterministic evaluation was not healthy: forward
 survived about 1.04 s before falling, while stand evaluation hit the explicit
 10-rad action diagnostic on its second control step. Training therefore stopped
 before iteration 20 and no long run was started.
+
+Checkpoint parameter parity is exact (maximum difference 0), normalization is
+restored, and no-noise/no-delay observations match at reset, steps 1, 2, and 5
+with maximum error 0. The deterministic forward actor mean over 1,000 rollout
+observations had mean absolute value 0.198, p95 0.501, p99 0.691, and maximum
+1.051. The stand failure is therefore a closed-loop physical/state-distribution
+instability after the first deterministic action, rather than a checkpoint or
+evaluation-loader mismatch.
