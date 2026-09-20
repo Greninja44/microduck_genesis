@@ -13,14 +13,18 @@ from .rewards import RewardComputer
 from .robot import HOME_POSE, add_microduck
 from .scene import add_ground, make_scene
 from .terminations import compute_terminations
+from .sensors import ActorSensorModel
 
 class MicroDuckGenesisEnv:
     observation_dim, action_dim = 61, ACTION_DIM
     physics_dt, control_dt, decimation = .005, .02, 4
     def __init__(self, num_envs: int = 1, headless: bool = True, device: str = 'cuda', seed: int = 0,
-                 evaluation_command: str | None = None, max_episode_seconds: float = 20., randomization: bool = True):
+                 evaluation_command: str | None = None, max_episode_seconds: float = 20., randomization: bool = True,
+                 domain_randomization: bool | None = None, sensor_noise: bool = True, sensor_delay: bool = True):
         import genesis as gs
-        self.num_envs, self.seed, self.randomization_enabled = num_envs, seed, randomization
+        self.num_envs, self.seed = num_envs, seed
+        self.randomization_enabled = randomization if domain_randomization is None else domain_randomization
+        self.sensor_noise_enabled, self.sensor_delay_enabled = sensor_noise, sensor_delay
         requested_cuda = device.startswith('cuda') and torch.cuda.is_available()
         self.device = torch.device('cuda' if requested_cuda else 'cpu')
         gs.init(backend=gs.gpu if requested_cuda else gs.cpu, seed=seed)
@@ -33,6 +37,7 @@ class MicroDuckGenesisEnv:
         self.last_actions = torch.zeros(num_envs, ACTION_DIM, device=self.device); self.episode_steps = torch.zeros(num_envs, dtype=torch.long, device=self.device)
         self.max_episode_steps = round(max_episode_seconds / self.control_dt)
         self._joint_vel_lag = torch.zeros_like(self.last_actions)
+        self.sensors = ActorSensorModel(num_envs, self.device, seed)
         self._foot_air_time = torch.zeros(num_envs, 2, device=self.device)
         self.critic_obs = torch.zeros(num_envs, 76, device=self.device)
         # The upstream names are sites/geoms (`left_foot`, `right_foot`). The
@@ -55,9 +60,12 @@ class MicroDuckGenesisEnv:
     def _obs(self):
         q, qd, pos, quat, vel, ang = self._state()
         gravity = self._projected_gravity(quat)
-        obs = build_actor_observation(base_ang_vel=ang, projected_gravity=gravity, joint_pos=q,
-            joint_vel=self._joint_vel_lag, last_action=self.last_actions, command=self.commands.command, encoder_bias=self.dr.encoder_bias if self.randomization_enabled else None)
-        self._joint_vel_lag.copy_(qd)
+        sensed_ang, sensed_gravity, sensed_vel = self.sensors.apply(
+            ang, gravity, qd, noise=self.sensor_noise_enabled,
+            delay=self.sensor_delay_enabled)
+        obs = build_actor_observation(base_ang_vel=sensed_ang, projected_gravity=sensed_gravity, joint_pos=q,
+            joint_vel=sensed_vel, last_action=self.last_actions, command=self.commands.command, encoder_bias=self.dr.encoder_bias if self.randomization_enabled else None)
+        self._joint_vel_lag.copy_(sensed_vel)
         self._last_state = (q, qd, pos, quat, vel, ang, gravity)
         return obs
 
@@ -81,7 +89,7 @@ class MicroDuckGenesisEnv:
         self.robot.set_dofs_velocity(torch.zeros_like(home), dofs_idx_local=self.servo_ids, envs_idx=ids)
         self.robot.set_pos(torch.tensor([0.,0.,.125], device=self.device).expand(len(ids), -1), envs_idx=ids, zero_velocity=True)
         self.robot.set_quat(torch.tensor([1.,0.,0.,0.], device=self.device).expand(len(ids), -1), envs_idx=ids, zero_velocity=True)
-        self.last_actions[ids] = 0; self._joint_vel_lag[ids] = 0; self._foot_air_time[ids] = 0; self.episode_steps[ids] = 0; self.rewarder.reset(ids)
+        self.last_actions[ids] = 0; self._joint_vel_lag[ids] = 0; self._foot_air_time[ids] = 0; self.episode_steps[ids] = 0; self.rewarder.reset(ids); self.sensors.reset(ids)
         self.commands.resample(ids)
         if self.randomization_enabled: reset_randomization(self.dr, ids, self.generator)
         return self._obs()

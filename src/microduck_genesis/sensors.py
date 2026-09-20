@@ -15,12 +15,14 @@ class ActorSensorModel:
     def reset(self, ids=None):
         if ids is None: self.prev_ang.zero_(); self.prev_grav.zero_(); self.prev_vel.zero_()
         else: self.prev_ang[ids]=0; self.prev_grav[ids]=0; self.prev_vel[ids]=0
-    def apply(self, ang, grav, qvel, *, enabled=True):
-        if not enabled: out=(ang,grav,self.prev_vel.clone())
-        else:
-            # The upstream delay sampler is 0–1 for IMU and exactly 1 for qdot.
-            out=(ang + torch.empty_like(ang).uniform_(-.03,.03,generator=self.gen),
-                 grav + torch.empty_like(grav).uniform_(-.01,.01,generator=self.gen),
-                 self.prev_vel + torch.empty_like(qvel).uniform_(-.25,.25,generator=self.gen))
+    def apply(self, ang, grav, qvel, *, noise=True, delay=True):
+        out_ang = self.prev_ang if delay else ang
+        out_grav = self.prev_grav if delay else grav
+        out_vel = self.prev_vel if delay else qvel
+        if noise:
+            out_ang = out_ang + torch.empty_like(ang).uniform_(-.03,.03,generator=self.gen)
+            out_grav = out_grav + torch.empty_like(grav).uniform_(-.01,.01,generator=self.gen)
+            out_vel = out_vel + torch.empty_like(qvel).uniform_(-.25,.25,generator=self.gen)
+        out=(out_ang,out_grav,out_vel)
         self.prev_ang.copy_(ang); self.prev_grav.copy_(grav); self.prev_vel.copy_(qvel)
         return out
