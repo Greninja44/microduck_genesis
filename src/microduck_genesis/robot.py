@@ -25,10 +25,10 @@ def mjcf_path() -> Path:
     return path
 
 
-def add_microduck(scene):
+def add_microduck(scene, *, visualize_contact: bool = False):
     """Add the current walking model directly, retaining its mesh-relative paths."""
     import genesis as gs
-    return scene.add_entity(gs.morphs.MJCF(file=str(mjcf_path())), visualize_contact=True)
+    return scene.add_entity(gs.morphs.MJCF(file=str(mjcf_path())), visualize_contact=visualize_contact)
 
 
 def actuated_dof_indices(robot) -> list[int]:
@@ -39,4 +39,3 @@ def set_home_pose(robot) -> list[int]:
     indices = actuated_dof_indices(robot)
     robot.set_dofs_position(HOME_POSE, dofs_idx_local=indices)
     return indices
-

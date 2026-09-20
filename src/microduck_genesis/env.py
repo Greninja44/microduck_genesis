@@ -29,7 +29,7 @@ class MicroDuckGenesisEnv:
         self.device = torch.device('cuda' if requested_cuda else 'cpu')
         gs.init(backend=gs.gpu if requested_cuda else gs.cpu, seed=seed)
         self.scene = make_scene(show_viewer=not headless, dt=self.physics_dt); self.ground = add_ground(self.scene)
-        self.robot = add_microduck(self.scene); self.scene.build(n_envs=num_envs, env_spacing=(1., 1.))
+        self.robot = add_microduck(self.scene, visualize_contact=not headless); self.scene.build(n_envs=num_envs, env_spacing=(1., 1.))
         self.mapping = resolve_action_mapping(self.robot); self.servo_ids = [m.genesis_dof_index for m in self.mapping]
         self.generator = torch.Generator(device=self.device).manual_seed(seed)
         self.commands = CommandGenerator(num_envs, self.device, seed, evaluation_command)
