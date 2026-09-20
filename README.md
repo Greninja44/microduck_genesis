@@ -6,6 +6,17 @@ critic ABI is 76D, and the policy has 14 joint-position actions. Review the
 [upstream audit](docs/microduck_rl_audit.md), [observation parity](docs/observation_parity.md),
 and [parity scorecard](docs/parity_scorecard.md) before using a checkpoint.
 
+![MicroDuck Genesis validation pipeline](docs/architecture.svg)
+
+The repository includes measured benchmark data and a visual summary. These
+are simulator throughput measurements, not evidence that a policy walks:
+
+![Genesis simulator throughput](docs/throughput.svg)
+
+Raw values are in [`docs/benchmark_data.csv`](docs/benchmark_data.csv) and
+[`logs/genesis_benchmark.csv`](logs/genesis_benchmark.csv). No locomotion GIF
+or video is included because visual policy behavior has not yet been validated.
+
 Install using the existing project environment:
 
 ```bash
