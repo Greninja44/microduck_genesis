@@ -100,8 +100,17 @@ class MicroDuckGenesisEnv:
         home = torch.tensor(HOME_POSE, device=self.device).expand(len(ids), -1)
         self.robot.set_dofs_position(home, dofs_idx_local=self.servo_ids, envs_idx=ids, zero_velocity=True)
         self.robot.set_dofs_velocity(torch.zeros_like(home), dofs_idx_local=self.servo_ids, envs_idx=ids)
-        self.robot.set_pos(torch.tensor([0.,0.,.125], device=self.device).expand(len(ids), -1), envs_idx=ids, zero_velocity=True)
-        self.robot.set_quat(torch.tensor([1.,0.,0.,0.], device=self.device).expand(len(ids), -1), envs_idx=ids, zero_velocity=True)
+        # Match mjlab reset_root_state_uniform exactly for the MicroDuck
+        # velocity task: x/y ∈ [-.5,.5], z ∈ [.12,.13], yaw ∈ [-pi,pi],
+        # with zero roll/pitch and zero root velocity. This is upstream reset
+        # distribution, independent of optional model-field randomization.
+        u = torch.rand((len(ids), 4), device=self.device, generator=self.generator)
+        xy = -0.5 + u[:, :2]
+        z = 0.12 + 0.01 * u[:, 2]
+        yaw = -torch.pi + 2.0 * torch.pi * u[:, 3]
+        self.robot.set_pos(torch.cat((xy, z[:, None]), dim=-1), envs_idx=ids, zero_velocity=True)
+        quat = torch.stack((torch.cos(yaw/2), torch.zeros_like(yaw), torch.zeros_like(yaw), torch.sin(yaw/2)), -1)
+        self.robot.set_quat(quat, envs_idx=ids, zero_velocity=True)
         self.last_actions[ids] = 0; self._joint_vel_lag[ids] = 0; self._foot_air_time[ids] = 0; self.episode_steps[ids] = 0; self.rewarder.reset(ids); self.sensors.reset(ids); self.last_bam_torque[ids] = 0
         self.commands.resample(ids)
         if self.randomization_enabled: reset_randomization(self.dr, ids, self.generator)

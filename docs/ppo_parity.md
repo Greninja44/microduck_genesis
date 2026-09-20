@@ -16,9 +16,9 @@
 | value coefficient | 1.0 | 1.0 | MATCHED |
 | max gradient norm | 1.0 | 1.0 | MATCHED |
 | rollout horizon | 24/env | 24/env | MATCHED |
-| adaptive KL schedule | desired_kl=0.01 | absent | MISSING |
+| adaptive KL schedule | desired_kl=0.01; /1.5 above 2x, *1.5 below 0.5x; bounds [1e-5,1e-2] | same | MATCHED |
 | symmetry augmentation | disabled in upstream velocity config | absent | NOT APPLICABLE |
-| timeout bootstrap | rsl_rl adds gamma·V on timeouts | Genesis currently masks all done | APPROXIMATED |
+| timeout bootstrap | rsl_rl adds gamma·V on timeouts | Genesis adds gamma·V only for timeouts | MATCHED |
 
 The action distribution itself has not been modified. The current failure is
 closed-loop state distribution, not a checkpoint or actor ABI mismatch.
