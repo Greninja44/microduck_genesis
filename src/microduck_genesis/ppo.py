@@ -5,18 +5,24 @@ from torch import nn
 from torch.distributions import Normal
 
 class ActorCritic(nn.Module):
-    def __init__(self, obs_dim=61, action_dim=14):
+    def __init__(self, obs_dim=61, action_dim=14, critic_obs_dim=76):
         super().__init__()
         def net(out):
             layers=[]; n=obs_dim
             for width in (512,256,128): layers += [nn.Linear(n,width),nn.ELU()]; n=width
             layers.append(nn.Linear(n,out)); return nn.Sequential(*layers)
-        self.actor, self.critic = net(action_dim), net(1); self.log_std=nn.Parameter(torch.zeros(action_dim))
+        self.actor = net(action_dim)
+        layers=[]; n=critic_obs_dim
+        for width in (512,256,128): layers += [nn.Linear(n,width),nn.ELU()]; n=width
+        layers.append(nn.Linear(n,1)); self.critic=nn.Sequential(*layers)
+        self.log_std=nn.Parameter(torch.zeros(action_dim))
     def distribution(self, obs): return Normal(self.actor(obs), self.log_std.exp())
-    def act(self, obs):
-        d=self.distribution(obs); a=d.sample(); return a,d.log_prob(a).sum(-1),self.critic(obs).squeeze(-1)
-    def evaluate(self, obs, actions):
-        d=self.distribution(obs); return d.log_prob(actions).sum(-1),d.entropy().sum(-1),self.critic(obs).squeeze(-1)
+    def act(self, obs, critic_obs=None):
+        if critic_obs is None: critic_obs=obs
+        d=self.distribution(obs); a=d.sample(); return a,d.log_prob(a).sum(-1),self.critic(critic_obs).squeeze(-1)
+    def evaluate(self, obs, actions, critic_obs=None):
+        if critic_obs is None: critic_obs=obs
+        d=self.distribution(obs); return d.log_prob(actions).sum(-1),d.entropy().sum(-1),self.critic(critic_obs).squeeze(-1)
 
 class RunningNorm(nn.Module):
     def __init__(self, dim): super().__init__(); self.register_buffer('mean',torch.zeros(dim)); self.register_buffer('var',torch.ones(dim)); self.register_buffer('count',torch.tensor(1e-4))
