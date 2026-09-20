@@ -14,6 +14,7 @@ from .robot import HOME_POSE, add_microduck
 from .scene import add_ground, make_scene
 from .terminations import compute_terminations
 from .sensors import ActorSensorModel
+from .bam import bam_torque
 
 class MicroDuckGenesisEnv:
     observation_dim, action_dim = 61, ACTION_DIM
@@ -25,6 +26,7 @@ class MicroDuckGenesisEnv:
         self.num_envs, self.seed = num_envs, seed
         self.randomization_enabled = randomization if domain_randomization is None else domain_randomization
         self.sensor_noise_enabled, self.sensor_delay_enabled = sensor_noise, sensor_delay
+        self.actuator_mode = "bam_torque"
         requested_cuda = device.startswith('cuda') and torch.cuda.is_available()
         self.device = torch.device('cuda' if requested_cuda else 'cpu')
         gs.init(backend=gs.gpu if requested_cuda else gs.cpu, seed=seed)
@@ -40,6 +42,7 @@ class MicroDuckGenesisEnv:
         self.sensors = ActorSensorModel(num_envs, self.device, seed)
         self._foot_air_time = torch.zeros(num_envs, 2, device=self.device)
         self.critic_obs = torch.zeros(num_envs, 76, device=self.device)
+        self.last_bam_torque = torch.zeros(num_envs, ACTION_DIM, device=self.device)
         # The upstream names are sites/geoms (`left_foot`, `right_foot`). The
         # Genesis MJCF importer exposes their parent rigid links as
         # `ankle_left` and `ankle_right`.
@@ -81,6 +84,14 @@ class MicroDuckGenesisEnv:
         self_collision = valid.any(dim=-1)
         return foot_pos, foot_vel, foot_contact, self_collision, foot_force
 
+    def compute_bam_torque(self, targets: torch.Tensor, q: torch.Tensor, qd: torch.Tensor) -> torch.Tensor:
+        """Return the exact vectorized command sent to Genesis force control."""
+        vin = torch.full_like(q, 7.4)
+        torque = bam_torque(targets, q, qd, vin, friction_scale=self.dr.friction_scale)
+        if torque.shape != (self.num_envs, ACTION_DIM) or not torch.isfinite(torque).all():
+            raise AssertionError("invalid BAM torque command")
+        return torque
+
     def reset(self, env_ids: torch.Tensor | None = None):
         ids = torch.arange(self.num_envs, device=self.device, dtype=torch.int32) if env_ids is None else env_ids.to(self.device, torch.int32)
         if len(ids) == 0: return self._obs()
@@ -89,7 +100,7 @@ class MicroDuckGenesisEnv:
         self.robot.set_dofs_velocity(torch.zeros_like(home), dofs_idx_local=self.servo_ids, envs_idx=ids)
         self.robot.set_pos(torch.tensor([0.,0.,.125], device=self.device).expand(len(ids), -1), envs_idx=ids, zero_velocity=True)
         self.robot.set_quat(torch.tensor([1.,0.,0.,0.], device=self.device).expand(len(ids), -1), envs_idx=ids, zero_velocity=True)
-        self.last_actions[ids] = 0; self._joint_vel_lag[ids] = 0; self._foot_air_time[ids] = 0; self.episode_steps[ids] = 0; self.rewarder.reset(ids); self.sensors.reset(ids)
+        self.last_actions[ids] = 0; self._joint_vel_lag[ids] = 0; self._foot_air_time[ids] = 0; self.episode_steps[ids] = 0; self.rewarder.reset(ids); self.sensors.reset(ids); self.last_bam_torque[ids] = 0
         self.commands.resample(ids)
         if self.randomization_enabled: reset_randomization(self.dr, ids, self.generator)
         return self._obs()
@@ -97,7 +108,15 @@ class MicroDuckGenesisEnv:
     def step(self, actions: torch.Tensor):
         if actions.shape != (self.num_envs, ACTION_DIM): raise AssertionError(f'expected {(self.num_envs, ACTION_DIM)}, got {tuple(actions.shape)}')
         actions = actions.to(self.device); targets = action_to_targets(actions)
-        for _ in range(self.decimation): self.robot.control_dofs_position(targets, dofs_idx_local=self.servo_ids); self.scene.step()
+        if self.actuator_mode != "bam_torque":
+            raise RuntimeError("only bam_torque is permitted in the training environment")
+        for _ in range(self.decimation):
+            q_now = self.robot.get_dofs_position(self.servo_ids)
+            qd_now = self.robot.get_dofs_velocity(self.servo_ids)
+            torque = self.compute_bam_torque(targets, q_now, qd_now)
+            self.last_bam_torque.copy_(torque)
+            self.robot.control_dofs_force(torque, dofs_idx_local=self.servo_ids)
+            self.scene.step()
         q, qd, pos, quat, vel, ang = self._state(); gravity = self._projected_gravity(quat)
         self.episode_steps += 1
         foot_pos, foot_vel, foot_contact, self_collision, foot_force = self._contact_state()

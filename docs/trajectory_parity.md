@@ -29,6 +29,13 @@ Genesis headless replay still performs a one-time visualizer/kernel build in
 Genesis 1.4.1, even when no viewer is requested. The replay itself completed
 successfully after removing contact visualization from headless entities.
 
+The old position-control replay is preserved as
+`logs/genesis_replay_position_control.npz`. The BAM-force replay is stored as
+`logs/genesis_replay_bam_torque.npz`. For the zero-action five-step trace the
+state metrics are identical because both paths remain at the home pose; the
+important change is that the BAM torque is now the command sent to Genesis at
+each substep rather than a target passed to a built-in position controller.
+
 Terrain height is used by the active flat-ground task's privileged critic and
 foot rewards. Genesis currently uses foot height above the plane as the closest
 equivalent to MJLab's two-ray foot-height sensor; this is classified as

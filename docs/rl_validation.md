@@ -12,12 +12,23 @@ steps), produced finite observations/actions/rewards/state, and wrote
 `logs/single_env_smoke.csv`. 1, 8, and 64 environment smoke checks pass with
 independent batched shapes and weighted reward sums.
 
+The RL environment now uses vectorized BAM force control by default. Each 20 ms
+policy action is converted to `HOME_POSE + action`; BAM torque is recomputed at
+each of the four 5 ms physics substeps and sent through Genesis
+`control_dofs_force`. The previous position-control path is rejected by an
+actuator-mode guard.
+
 The earlier five-iteration PPO smoke at 64 environments completed and saved five
 checkpoints. Mean reward was 4.930 → 5.171. The deterministic 64-environment
 forward-command overfit test completed ten iterations with mean reward
 5.113 → 5.700. After wiring the actor sensor model, a bounded one-iteration
 final-path smoke completed at reward 5.058, policy loss -0.0834, value loss
 25.1883, and entropy 19.776.
+
+With BAM force control enabled, a bounded 64-environment PPO run completed four
+iterations before the execution window ended. Rewards were 5.810 → 5.843;
+policy, value, and entropy metrics remained finite. A short one-environment
+force-control smoke also passed without NaN/Inf state or torque values.
 
 The final one-environment path passes 1000 control steps with sensor model,
 privileged critic, rewards, contacts, terminations, and finite-state checks.

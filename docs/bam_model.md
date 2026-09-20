@@ -24,7 +24,10 @@ The M6 budget is `base + Stribeck + directional load + quadratic load`, where
 in `src/microduck_genesis/bam.py`.
 
 MuJoCo writes this budget to per-world `dof_frictionloss` and `dof_damping`;
-its constraint solver clips the stopping torque. Genesis has no equivalent
-per-step static-friction constraint API, so Genesis currently applies the same
-motor equation and a signed Coulomb plus viscous torque. Motor equations are
-**EXACT**; contact/friction solver semantics are **APPROXIMATED**.
+its constraint solver clips the stopping torque. Genesis now uses
+`control_dofs_force` exclusively in the RL environment: no Genesis position
+controller is active, and the vectorized BAM command is recalculated at every
+5 ms physics step during the four-step policy decimation. Genesis has no
+equivalent per-step static-friction constraint API, so the signed Coulomb plus
+viscous friction application remains **APPROXIMATED** while the motor equation
+and actual force-control path are **MATCHED**.
