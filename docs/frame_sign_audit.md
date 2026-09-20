@@ -22,7 +22,7 @@ The related quantities are checked as follows:
 | forward velocity | base-frame linear velocity x | `get_vel(relative=True)[..., 0]` | MATCHED |
 | command tracking | command twist x/y against base-frame velocity | same tensor components | MATCHED |
 | base angular velocity | base-frame angular velocity | Genesis angular velocity accessor | APPROXIMATED |
-| orientation termination | `acos(-g_z) > limit_angle` | `g_z > -0.5` for 60 degrees | MATCHED |
+| orientation termination | `acos(-g_z) > 70°` | `g_z > -cos(70°)` | MATCHED |
 
 Regression cases cover identity, 20-degree roll/pitch, and 100-degree
 forward/backward/left/right falls.

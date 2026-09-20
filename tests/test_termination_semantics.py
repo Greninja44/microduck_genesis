@@ -28,6 +28,8 @@ def test_termination_orientation_cases():
     assert _terminated(torch.tensor([1.0, 0.0, 0.0, 0.0])) == (False, -1.0)
     assert _terminated(_quat('roll', 20.0))[0] is False
     assert _terminated(_quat('pitch', 20.0))[0] is False
+    assert _terminated(_quat('pitch', 65.0))[0] is False
+    assert _terminated(_quat('pitch', 75.0))[0] is True
     assert _terminated(_quat('pitch', 100.0))[0] is True
     assert _terminated(_quat('pitch', -100.0))[0] is True
     assert _terminated(_quat('roll', 100.0))[0] is True

@@ -1,12 +1,12 @@
 """Termination checks ported where Genesis exposes equivalent state."""
 from __future__ import annotations
+import math
 import torch
 
 def compute_terminations(*, base_pos: torch.Tensor, projected_gravity: torch.Tensor, state_tensors: tuple[torch.Tensor, ...], episode_steps: torch.Tensor, max_episode_steps: int) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-    # MJLab's bad_orientation is acos(-projected_gravity_b.z) > limit_angle.
-    # With the equivalent 60-degree limit and gravity [0, 0, -1] when upright,
-    # this is z > -0.5.
-    tilted = projected_gravity[:, 2] > -0.5
+    # MJLab's velocity task uses limit_angle=70 degrees:
+    # acos(-projected_gravity_b.z) > limit_angle.
+    tilted = projected_gravity[:, 2] > -math.cos(math.radians(70.0))
     below_ground = base_pos[:, 2] < 0.04
     nan_state = ~torch.stack([torch.isfinite(x).all(dim=tuple(range(1, x.ndim))) for x in state_tensors]).all(dim=0)
     timeout = episode_steps >= max_episode_steps

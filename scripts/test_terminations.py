@@ -30,6 +30,8 @@ def main():
     check('HOME_POSE', torch.tensor([1., 0., 0., 0.]), False)
     check('small_roll', quat('roll', 20), False)
     check('small_pitch', quat('pitch', 20), False)
+    check('pitch_65deg', quat('pitch', 65), False)
+    check('pitch_75deg', quat('pitch', 75), True)
     check('fallen_forward', quat('pitch', 100), True)
     check('fallen_backward', quat('pitch', -100), True)
     check('fallen_left', quat('roll', 100), True)

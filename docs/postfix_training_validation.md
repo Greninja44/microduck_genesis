@@ -24,3 +24,20 @@ observations had mean absolute value 0.198, p95 0.501, p99 0.691, and maximum
 1.051. The stand failure is therefore a closed-loop physical/state-distribution
 instability after the first deterministic action, rather than a checkpoint or
 evaluation-loader mismatch.
+
+The forward failure trace reaches its first rollout-distribution outlier at
+0.96 s: projected gravity exceeds 3 standard deviations while the robot is
+still in bilateral foot contact. Pitch then grows from 0.49 rad to 1.10 rad,
+and the 70-degree termination fires at 1.14 s. Joint-position and joint-speed
+fields remain within the recorded rollout distribution through that point.
+
+The 24-step PPO horizon is 0.48 s, shorter than this failure horizon. In the
+64-environment diagnostic rollout only one orientation reset occurred and no
+timeout or NaN reset occurred. The validation reset distribution had zero
+spread because randomization was disabled and Genesis resets to a fixed
+HOME_POSE/base pose; upstream reset events randomize base x/y/yaw and z.
+
+After correcting the verified upstream 70-degree threshold, a separate fresh
+five-iteration run (`checkpoints/postfix70/`) remained numerically finite, but
+its deterministic forward checkpoint 5 survived 0.72 s and then fell. No
+iteration-20 run was started.

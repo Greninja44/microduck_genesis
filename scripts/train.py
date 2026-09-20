@@ -33,10 +33,11 @@ def main():
                 mu=model.actor(norm(obs)); act,lp,val=model.act(norm(obs),critic_norm(env.critic_obs))
             finite('actor mean',mu); finite('sampled action',act); nxt,rew,done,info=env.step(act); finite('reward',rew); finite('next observation',nxt); finite('critic observation',info['critic_obs'])
             from microduck_genesis.actions import action_to_targets
-            av.append(act.detach()); am.append(mu.detach()); tg.append(action_to_targets(act).detach()); tv.append(env.last_bam_torque.detach().clone()); _,_,_,_,vel,_=env._state(); finite('base state',vel); vv.append(vel[:,0].detach()); dv.append(done.detach()); rollout.append((obs,env.critic_obs.clone(),act,lp,val,rew,done)); obs=nxt
+            av.append(act.detach()); am.append(mu.detach()); tg.append(action_to_targets(act).detach()); tv.append(env.last_bam_torque.detach().clone()); _,_,_,_,vel,_=env._state(); finite('base state',vel); vv.append(vel[:,0].detach()); dv.append(done.detach()); rollout.append((obs,env.critic_obs.clone(),act,lp,val,rew,done,info['termination_terms']['time_out'].detach())); obs=nxt
         with torch.no_grad(): last=model.critic(critic_norm(env.critic_obs)).squeeze(-1); finite('critic value',last)
         returns=[]; gae=torch.zeros(a.num_envs,device=dev)
-        for _,_,_,_,val,rew,done in reversed(rollout): nd=(~done).float(); gae=rew+.99*last*nd-val+.99*.95*nd*gae; returns.append(gae+val); last=val
+        for _,_,_,_,val,rew,done,time_out in reversed(rollout):
+            rew=rew+.99*val*time_out.float(); nd=(~done).float(); gae=rew+.99*last*nd-val+.99*.95*nd*gae; returns.append(gae+val); last=val
         R=torch.stack(list(reversed(returns))); O=torch.stack([x[0] for x in rollout]); C=torch.stack([x[1] for x in rollout]); A=torch.stack([x[2] for x in rollout]); LP=torch.stack([x[3] for x in rollout]); V=torch.stack([x[4] for x in rollout]); O,C,A,LP,V,R=[x.reshape(-1,*x.shape[2:]) if x.ndim>2 else x.reshape(-1) for x in (O,C,A,LP,V,R)]
         adv=(R-V); adv=(adv-adv.mean())/(adv.std()+1e-8); idx=torch.randperm(len(O),device=dev); losses=[]; grads=[]
         for _ in range(5):
