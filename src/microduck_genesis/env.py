@@ -7,6 +7,7 @@ import torch
 from .actions import ACTION_DIM, action_to_targets, resolve_action_mapping
 from .commands import CommandGenerator
 from .observations import build_actor_observation, validate_observation
+from .critic_observations import build_critic_observation
 from .randomization import make_randomization, reset_randomization
 from .rewards import RewardComputer
 from .robot import HOME_POSE, add_microduck
@@ -32,6 +33,8 @@ class MicroDuckGenesisEnv:
         self.last_actions = torch.zeros(num_envs, ACTION_DIM, device=self.device); self.episode_steps = torch.zeros(num_envs, dtype=torch.long, device=self.device)
         self.max_episode_steps = round(max_episode_seconds / self.control_dt)
         self._joint_vel_lag = torch.zeros_like(self.last_actions)
+        self._foot_air_time = torch.zeros(num_envs, 2, device=self.device)
+        self.critic_obs = torch.zeros(num_envs, 76, device=self.device)
         # The upstream names are sites/geoms (`left_foot`, `right_foot`). The
         # Genesis MJCF importer exposes their parent rigid links as
         # `ankle_left` and `ankle_right`.
@@ -55,6 +58,7 @@ class MicroDuckGenesisEnv:
         obs = build_actor_observation(base_ang_vel=ang, projected_gravity=gravity, joint_pos=q,
             joint_vel=self._joint_vel_lag, last_action=self.last_actions, command=self.commands.command, encoder_bias=self.dr.encoder_bias if self.randomization_enabled else None)
         self._joint_vel_lag.copy_(qd)
+        self._last_state = (q, qd, pos, quat, vel, ang, gravity)
         return obs
 
     def _contact_state(self):
@@ -67,7 +71,7 @@ class MicroDuckGenesisEnv:
         contacts = self.robot.get_contacts(with_entity=self.robot, exclude_self_contact=False, is_padded=True)
         valid = contacts['valid_mask']
         self_collision = valid.any(dim=-1)
-        return foot_pos, foot_vel, foot_contact, self_collision
+        return foot_pos, foot_vel, foot_contact, self_collision, foot_force
 
     def reset(self, env_ids: torch.Tensor | None = None):
         ids = torch.arange(self.num_envs, device=self.device, dtype=torch.int32) if env_ids is None else env_ids.to(self.device, torch.int32)
@@ -77,7 +81,7 @@ class MicroDuckGenesisEnv:
         self.robot.set_dofs_velocity(torch.zeros_like(home), dofs_idx_local=self.servo_ids, envs_idx=ids)
         self.robot.set_pos(torch.tensor([0.,0.,.125], device=self.device).expand(len(ids), -1), envs_idx=ids, zero_velocity=True)
         self.robot.set_quat(torch.tensor([1.,0.,0.,0.], device=self.device).expand(len(ids), -1), envs_idx=ids, zero_velocity=True)
-        self.last_actions[ids] = 0; self._joint_vel_lag[ids] = 0; self.episode_steps[ids] = 0; self.rewarder.reset(ids)
+        self.last_actions[ids] = 0; self._joint_vel_lag[ids] = 0; self._foot_air_time[ids] = 0; self.episode_steps[ids] = 0; self.rewarder.reset(ids)
         self.commands.resample(ids)
         if self.randomization_enabled: reset_randomization(self.dr, ids, self.generator)
         return self._obs()
@@ -88,9 +92,20 @@ class MicroDuckGenesisEnv:
         for _ in range(self.decimation): self.robot.control_dofs_position(targets, dofs_idx_local=self.servo_ids); self.scene.step()
         q, qd, pos, quat, vel, ang = self._state(); gravity = self._projected_gravity(quat)
         self.episode_steps += 1
-        foot_pos, foot_vel, foot_contact, self_collision = self._contact_state()
+        foot_pos, foot_vel, foot_contact, self_collision, foot_force = self._contact_state()
         rewards, terms = self.rewarder.compute(base_lin_vel=vel, base_ang_vel=ang, projected_gravity=gravity, joint_pos=q, actions=actions, previous_actions=self.last_actions, command=self.commands.command, foot_pos=foot_pos, foot_vel=foot_vel, foot_contact=foot_contact, self_collision=self_collision)
         dones, termination_terms = compute_terminations(base_pos=pos, projected_gravity=gravity, state_tensors=(q,qd,pos,quat,vel,ang), episode_steps=self.episode_steps, max_episode_steps=self.max_episode_steps)
-        self.last_actions.copy_(actions); done_ids = dones.nonzero().flatten(); terminal_obs = self._obs(); self.reset(done_ids)
+        self.last_actions.copy_(actions)
+        self._foot_air_time += self.control_dt
+        self._foot_air_time[foot_contact] = 0.0
+        done_ids = dones.nonzero().flatten(); terminal_obs = self._obs(); self.reset(done_ids)
         obs = self._obs(); validate_observation(obs, batch=self.num_envs)
-        return obs, rewards, dones, {'reward_terms': terms, 'termination_terms': termination_terms, 'terminal_observation': terminal_obs}
+        q, qd, pos, quat, vel, ang, gravity = self._last_state
+        # Genesis has no terrain ray sensor in this environment; foot z relative
+        # to the plane is the closest physically meaningful equivalent.
+        foot_height = foot_pos[..., 2] - 0.0
+        self.critic_obs = build_critic_observation(base_lin_vel=vel, base_ang_vel=ang,
+            projected_gravity=gravity, joint_pos=q, joint_vel=qd, last_action=self.last_actions,
+            command=self.commands.command, foot_height=foot_height, foot_air_time=self._foot_air_time,
+            foot_contact=foot_contact.float(), foot_contact_forces=foot_force)
+        return obs, rewards, dones, {'reward_terms': terms, 'termination_terms': termination_terms, 'terminal_observation': terminal_obs, 'critic_obs': self.critic_obs}
