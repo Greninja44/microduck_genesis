@@ -17,6 +17,11 @@ Raw values are in [`docs/benchmark_data.csv`](docs/benchmark_data.csv) and
 [`logs/genesis_benchmark.csv`](logs/genesis_benchmark.csv). No locomotion GIF
 or video is included because visual policy behavior has not yet been validated.
 
+The completed five-step simulator replay is documented in
+[`docs/trajectory_parity.md`](docs/trajectory_parity.md), with authoritative
+artifacts [`logs/mujoco_reference.npz`](logs/mujoco_reference.npz) and
+[`logs/genesis_replay.npz`](logs/genesis_replay.npz).
+
 Install using the existing project environment:
 
 ```bash
@@ -82,6 +87,9 @@ PYTHONPATH=src python scripts/train.py --num-envs 64 --headless --device cuda --
 ```
 
 The PPO runner keeps the 61D actor and 76D privileged critic streams separate.
+Training uses the upstream-equivalent actor sensor noise and one-step velocity
+delay by default. Disable them for deterministic evaluation by constructing the
+environment with `sensor_noise=False, sensor_delay=False`.
 Use a fixed command and disable randomization for an easy debugging run:
 
 ```bash
@@ -130,5 +138,5 @@ The completed GPU measurements and limitations are recorded in
 16.7k, 38.3k, and 81.7k physics steps/s at 256, 512, and 1024 environments;
 PPO throughput is memory-safe at those counts, but 256 remains the recommended
 starting point. The project is currently **NOT READY FOR LOCOMOTION TRAINING**:
-paired MuJoCo/Genesis trajectories, exact terrain raycasts, upstream sensor
-noise/delay, and complete model-field randomization still need validation.
+100-iteration learning, checkpoint evaluation, visual policy behavior, exact
+terrain raycasts, and complete model-field randomization still need validation.

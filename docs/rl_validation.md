@@ -12,11 +12,20 @@ steps), produced finite observations/actions/rewards/state, and wrote
 `logs/single_env_smoke.csv`. 1, 8, and 64 environment smoke checks pass with
 independent batched shapes and weighted reward sums.
 
-The five-iteration PPO smoke at 64 environments completed and saved five
-checkpoints. Mean reward was 4.930 → 5.171 over the five iterations; policy,
-value, and entropy metrics were finite and parameters changed. The deterministic
-64-environment forward-command overfit test completed ten iterations with mean
-reward 5.113 → 5.700 and value loss 25.61 → 2.56.
+The earlier five-iteration PPO smoke at 64 environments completed and saved five
+checkpoints. Mean reward was 4.930 → 5.171. The deterministic 64-environment
+forward-command overfit test completed ten iterations with mean reward
+5.113 → 5.700. After wiring the actor sensor model, a bounded one-iteration
+final-path smoke completed at reward 5.058, policy loss -0.0834, value loss
+25.1883, and entropy 19.776.
+
+The final one-environment path passes 1000 control steps with sensor model,
+privileged critic, rewards, contacts, terminations, and finite-state checks.
+
+Genesis replay is complete for the five-step MuJoCo reference. Cold startup is
+about 18–25 seconds and warm replay startup is about 30–40 seconds because
+Genesis 1.4.1 still builds the visualizer/kernel path during headless scene
+creation. Replay metrics are recorded in `docs/trajectory_parity.md`.
 
 | environments | RL sim FPS (physics steps/s) | PPO FPS (env control steps/s) | nvidia-smi used | process RAM |
 |---:|---:|---:|---:|---:|
@@ -32,12 +41,14 @@ substantial measured VRAM headroom while giving a stable 928 PPO env-steps/s;
 critic tensors and exact actuator state.
 
 MuJoCo/MJLab policy transfer was **NOT TESTED**: no compatible trained ONNX or
-checkpoint exists locally. MuJoCo paired simulator traces were **NOT TESTED**
-because the MJLab runtime is not installed in this project.
+checkpoint exists locally. The paired five-step MuJoCo/Genesis trace is now
+**TESTED**. A 100-step trace, 100-iteration learning experiment, checkpoint
+evaluation, and visual policy evaluation remain outstanding.
 
-Known remaining approximations are BAM voltage/friction/latency/backlash
-actuation, actor sensor noise and IMU misalignment, critic privileged
-observations, exact MuJoCo contact/raycast reward formulas, and model-field
-domain randomization. These are documented individually in the parity docs and
-are why this result is a validated Genesis pipeline rather than a claim of
-simulator or sim-to-real parity.
+Known remaining approximations are Genesis static-friction solver semantics,
+exact MuJoCo contact/raycast reward formulas, model-field domain randomization,
+and dynamic torque capture from Genesis's position-control interface. Actor
+sensor noise/delay is now wired; IMU mounting randomization and some model-field
+randomization remain deferred. These are documented individually in the parity
+docs and are why this result is a validated Genesis pipeline rather than a
+claim of simulator or sim-to-real parity.
