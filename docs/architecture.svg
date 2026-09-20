@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="220" viewBox="0 0 920 220">
+<rect width="920" height="220" rx="18" fill="#101827"/>
+<text x="460" y="32" text-anchor="middle" font-family="sans-serif" font-size="20" fill="#fff">MicroDuck Genesis RL validation pipeline</text>
+<g font-family="sans-serif" font-size="15" text-anchor="middle">
+<g fill="#2563eb"><rect x="24" y="80" width="130" height="62" rx="10"/><rect x="184" y="80" width="130" height="62" rx="10"/><rect x="344" y="80" width="130" height="62" rx="10"/><rect x="504" y="80" width="130" height="62" rx="10"/><rect x="664" y="80" width="130" height="62" rx="10"/></g>
+<g fill="#fff"><text x="89" y="116">MicroDuck MJCF</text><text x="249" y="116">Genesis gs.cuda</text><text x="409" y="107">61D actor</text><text x="409" y="127">76D critic</text><text x="569" y="116">PPO</text><text x="729" y="107">Checkpoint</text><text x="729" y="127">/ evaluation</text></g>
+<g stroke="#93c5fd" stroke-width="3" fill="none"><path d="M154 111h30M314 111h30M474 111h30M634 111h30"/><path d="m174 104 10 7-10 7M334 104l10 7-10 7M494 104l10 7-10 7M654 104l10 7-10 7"/></g>
+</g></svg>

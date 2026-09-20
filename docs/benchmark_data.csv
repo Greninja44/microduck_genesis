@@ -1,0 +1,6 @@
+num_envs,simulator_physics_steps_per_s,source
+64,6562.9,logs/genesis_benchmark.csv
+128,14524.0,logs/genesis_benchmark.csv
+256,28385.1,logs/genesis_benchmark.csv
+512,54822.6,logs/genesis_benchmark.csv
+1024,96440.2,logs/genesis_benchmark.csv
