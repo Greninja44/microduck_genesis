@@ -56,9 +56,11 @@ class MicroDuckGenesisEnv:
 
     @staticmethod
     def _projected_gravity(quat: torch.Tensor) -> torch.Tensor:
-        # Genesis uses wxyz quaternions for MJCF state. Rotate world [0,0,-1] by q^-1.
+        # Genesis uses wxyz quaternions for MJCF state. Rotate world gravity
+        # [0, 0, -1] by q^-1.  This matches MJLab's
+        # ``asset.data.projected_gravity_b``: upright is [0, 0, -1].
         w, x, y, z = quat.unbind(-1)
-        return torch.stack((2*(x*z-w*y), 2*(y*z+w*x), 1-2*(x*x+y*y)), -1)
+        return torch.stack((2*(w*y-x*z), -2*(y*z+w*x), -(1-2*(x*x+y*y))), -1)
 
     def _obs(self):
         q, qd, pos, quat, vel, ang = self._state()

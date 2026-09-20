@@ -8,6 +8,7 @@ logs/*.csv
 logs/*.log
 checkpoints/*.pt
 checkpoints/*.onnx
+checkpoints/*
 runs/*
 logs/*.csv
 __pycache__/
