@@ -136,6 +136,8 @@ class MicroDuckGenesisEnv:
         self.last_actions.copy_(actions)
         self._foot_air_time += self.control_dt
         self._foot_air_time[foot_contact] = 0.0
+        # Preserve terminal physical state before automatic reset for evaluators.
+        terminal_pos, terminal_quat, terminal_vel = pos.clone(), quat.clone(), vel.clone()
         done_ids = dones.nonzero().flatten(); terminal_obs = self._obs(); self.reset(done_ids)
         obs = self._obs(); validate_observation(obs, batch=self.num_envs)
         q, qd, pos, quat, vel, ang, gravity = self._last_state
@@ -146,4 +148,4 @@ class MicroDuckGenesisEnv:
             projected_gravity=gravity, joint_pos=q, joint_vel=qd, last_action=self.last_actions,
             command=self.commands.command, foot_height=foot_height, foot_air_time=self._foot_air_time,
             foot_contact=foot_contact.float(), foot_contact_forces=foot_force)
-        return obs, rewards, dones, {'reward_terms': terms, 'termination_terms': termination_terms, 'terminal_observation': terminal_obs, 'critic_obs': self.critic_obs}
+        return obs, rewards, dones, {'reward_terms': terms, 'termination_terms': termination_terms, 'terminal_observation': terminal_obs, 'terminal_pos': terminal_pos, 'terminal_quat': terminal_quat, 'terminal_vel': terminal_vel, 'critic_obs': self.critic_obs}

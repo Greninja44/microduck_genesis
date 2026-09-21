@@ -22,6 +22,7 @@ def main():
         state=torch.load(a.checkpoint,map_location=dev,weights_only=False); model.load_state_dict(state['model']); norm.load_state_dict(state['norm']); critic_norm.load_state_dict(state.get('critic_norm',critic_norm.state_dict())); opt.load_state_dict(state['optimizer']); start=int(state.get('iteration',0))
     elif a.checkpoint: raise ValueError('checkpoint requires --resume')
     ckdir=Path(a.checkpoint_dir); ckdir.mkdir(parents=True,exist_ok=True); mp=Path(a.metrics); mp.parent.mkdir(parents=True,exist_ok=True)
+    if not a.resume: torch.save({'model':model.state_dict(),'norm':norm.state_dict(),'critic_norm':critic_norm.state_dict(),'optimizer':opt.state_dict(),'iteration':0},ckdir/'model_0000.pt')
     fields=['iteration','mean_reward','episode_length','termination_rate','mean_roll','mean_pitch','p95_pitch','mean_base_height','commanded_vx','mean_vx','tracking_rmse','mean_abs_actor_mean','max_abs_actor_mean','mean_abs_action','max_abs_action','action_std','mean_abs_bam_target','max_abs_bam_target','mean_abs_bam_torque','max_abs_bam_torque','torque_saturation_fraction','policy_loss','value_loss','entropy','gradient_norm','actor_grad_norm','critic_grad_norm','post_clip_grad_norm','actor_parameter_norm','critic_parameter_norm','kl','learning_rate','log_std_min','log_std_max','ppo_fps','vram_mib','ram_mib']; new=not mp.exists() or mp.stat().st_size==0; mf=mp.open('a',newline=''); writer=csv.DictWriter(mf,fieldnames=fields); writer.writeheader() if new else None
     obs=env.reset()
     for local in range(a.iterations):
