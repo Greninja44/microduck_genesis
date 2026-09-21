@@ -6,6 +6,32 @@ critic ABI is 76D, and the policy has 14 joint-position actions. Review the
 [upstream audit](docs/microduck_rl_audit.md), [observation parity](docs/observation_parity.md),
 and [parity scorecard](docs/parity_scorecard.md) before using a checkpoint.
 
+<p align="center">
+  <img src="docs/assets/microduck_genesis.gif" width="720" alt="MicroDuck model running in Genesis">
+</p>
+
+<p align="center"><i>MicroDuck model running in Genesis.</i></p>
+
+## Simulation
+
+<p align="center">
+  <img src="docs/assets/microduck_genesis.png" width="48%" alt="MicroDuck in Genesis">
+  <img src="docs/assets/microduck_genesis_side.png" width="48%" alt="MicroDuck side view in Genesis">
+</p>
+
+These are frames from the repository's standalone Genesis scene recorder. The
+motion is a scripted, small articulation around the HOME pose—not a learned
+walking demonstration.
+
+## RL validation
+
+![20-iteration PPO checkpoint evaluation](docs/assets/learning20_evaluation.png)
+
+The Genesis environment and BAM force-control path pass the current contract
+tests. The first 20-iteration PPO experiment remained numerically stable, but
+its physical policy performance deteriorated and did not yet yield stable
+forward locomotion.
+
 ![MicroDuck Genesis validation pipeline](docs/architecture.svg)
 
 The repository includes measured benchmark data and a visual summary. These
