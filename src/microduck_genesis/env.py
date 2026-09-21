@@ -56,9 +56,11 @@ class MicroDuckGenesisEnv:
 
     @staticmethod
     def _projected_gravity(quat: torch.Tensor) -> torch.Tensor:
-        # Genesis uses wxyz quaternions for MJCF state. Rotate world [0,0,-1] by q^-1.
+        # Genesis uses wxyz quaternions for MJCF state. Rotate world gravity
+        # [0, 0, -1] by q^-1.  This matches MJLab's
+        # ``asset.data.projected_gravity_b``: upright is [0, 0, -1].
         w, x, y, z = quat.unbind(-1)
-        return torch.stack((2*(x*z-w*y), 2*(y*z+w*x), 1-2*(x*x+y*y)), -1)
+        return torch.stack((2*(w*y-x*z), -2*(y*z+w*x), -(1-2*(x*x+y*y))), -1)
 
     def _obs(self):
         q, qd, pos, quat, vel, ang = self._state()
@@ -98,8 +100,17 @@ class MicroDuckGenesisEnv:
         home = torch.tensor(HOME_POSE, device=self.device).expand(len(ids), -1)
         self.robot.set_dofs_position(home, dofs_idx_local=self.servo_ids, envs_idx=ids, zero_velocity=True)
         self.robot.set_dofs_velocity(torch.zeros_like(home), dofs_idx_local=self.servo_ids, envs_idx=ids)
-        self.robot.set_pos(torch.tensor([0.,0.,.125], device=self.device).expand(len(ids), -1), envs_idx=ids, zero_velocity=True)
-        self.robot.set_quat(torch.tensor([1.,0.,0.,0.], device=self.device).expand(len(ids), -1), envs_idx=ids, zero_velocity=True)
+        # Match mjlab reset_root_state_uniform exactly for the MicroDuck
+        # velocity task: x/y ∈ [-.5,.5], z ∈ [.12,.13], yaw ∈ [-pi,pi],
+        # with zero roll/pitch and zero root velocity. This is upstream reset
+        # distribution, independent of optional model-field randomization.
+        u = torch.rand((len(ids), 4), device=self.device, generator=self.generator)
+        xy = -0.5 + u[:, :2]
+        z = 0.12 + 0.01 * u[:, 2]
+        yaw = -torch.pi + 2.0 * torch.pi * u[:, 3]
+        self.robot.set_pos(torch.cat((xy, z[:, None]), dim=-1), envs_idx=ids, zero_velocity=True)
+        quat = torch.stack((torch.cos(yaw/2), torch.zeros_like(yaw), torch.zeros_like(yaw), torch.sin(yaw/2)), -1)
+        self.robot.set_quat(quat, envs_idx=ids, zero_velocity=True)
         self.last_actions[ids] = 0; self._joint_vel_lag[ids] = 0; self._foot_air_time[ids] = 0; self.episode_steps[ids] = 0; self.rewarder.reset(ids); self.sensors.reset(ids); self.last_bam_torque[ids] = 0
         self.commands.resample(ids)
         if self.randomization_enabled: reset_randomization(self.dr, ids, self.generator)
@@ -125,6 +136,8 @@ class MicroDuckGenesisEnv:
         self.last_actions.copy_(actions)
         self._foot_air_time += self.control_dt
         self._foot_air_time[foot_contact] = 0.0
+        # Preserve terminal physical state before automatic reset for evaluators.
+        terminal_pos, terminal_quat, terminal_vel = pos.clone(), quat.clone(), vel.clone()
         done_ids = dones.nonzero().flatten(); terminal_obs = self._obs(); self.reset(done_ids)
         obs = self._obs(); validate_observation(obs, batch=self.num_envs)
         q, qd, pos, quat, vel, ang, gravity = self._last_state
@@ -135,4 +148,4 @@ class MicroDuckGenesisEnv:
             projected_gravity=gravity, joint_pos=q, joint_vel=qd, last_action=self.last_actions,
             command=self.commands.command, foot_height=foot_height, foot_air_time=self._foot_air_time,
             foot_contact=foot_contact.float(), foot_contact_forces=foot_force)
-        return obs, rewards, dones, {'reward_terms': terms, 'termination_terms': termination_terms, 'terminal_observation': terminal_obs, 'critic_obs': self.critic_obs}
+        return obs, rewards, dones, {'reward_terms': terms, 'termination_terms': termination_terms, 'terminal_observation': terminal_obs, 'terminal_pos': terminal_pos, 'terminal_quat': terminal_quat, 'terminal_vel': terminal_vel, 'critic_obs': self.critic_obs}

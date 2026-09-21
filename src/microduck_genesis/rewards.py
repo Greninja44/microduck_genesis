@@ -17,6 +17,7 @@ class RewardComputer:
         self.num_envs, self.device, self.dt = num_envs, device, dt
         self.head_error_ema = torch.zeros(num_envs, 4, device=device)
         self.foot_air_time = torch.zeros(num_envs, 2, device=device)
+        self.foot_peak_height = torch.zeros(num_envs, 2, device=device)
         self.previous_foot_contact = torch.zeros(num_envs, 2, dtype=torch.bool, device=device)
         self.action_rate_weight, self.head_bias_weight = -.1, 0.
 
@@ -25,7 +26,7 @@ class RewardComputer:
         self.head_bias_weight = next(w for s, w in reversed(((0,0.),(600*24,1.),(1000*24,2.),(1500*24,3.))) if steps >= s)
 
     def reset(self, ids: torch.Tensor) -> None:
-        self.head_error_ema[ids] = 0; self.foot_air_time[ids] = 0; self.previous_foot_contact[ids] = False
+        self.head_error_ema[ids] = 0; self.foot_air_time[ids] = 0; self.foot_peak_height[ids] = 0; self.previous_foot_contact[ids] = False
 
     def compute(self, *, base_lin_vel: torch.Tensor, base_ang_vel: torch.Tensor,
                 projected_gravity: torch.Tensor, joint_pos: torch.Tensor,
@@ -52,6 +53,17 @@ class RewardComputer:
         # same batched accessor; angular velocity is the upstream observable
         # proxy and retains the penalty sign/scale.
         terms['angular_momentum'] = -.02 * torch.square(base_ang_vel).sum(-1)
+        # mjlab joint_pos_limits: penalty beyond soft limits (0.9 of hard
+        # limits for the MicroDuck model), summed over the 14 servo joints.
+        hard = torch.tensor([
+            [-.4363323,.5235988],[-.3839724,.3839724],[-1.5707963,1.5707963],
+            [-1.5707963,1.5707963],[-1.5707963,1.5707963],[-1.5707963,1.0471976],
+            [-1.5707963,1.5707963],[-2.9670597,2.9670597],[-.4363323,.4363323],
+            [-.5235988,.4363323],[-.3839724,.3839724],[-1.5707963,1.5707963],
+            [-1.5707963,1.5707963],[-1.5707963,1.5707963]], device=actions.device)
+        soft = hard * .9
+        qlim = joint_pos
+        terms['dof_pos_limits'] = -(torch.relu(soft[:, 0] - qlim) + torch.relu(qlim - soft[:, 1])).sum(-1)
         terms['action_rate_l2'] = self.action_rate_weight * torch.square(actions - previous_actions).sum(-1)
         head_ids = torch.tensor([5,6,7,8], device=actions.device)
         head_error = (joint_pos[:, head_ids] - home[head_ids]) - command[:, 3:7]
@@ -69,10 +81,20 @@ class RewardComputer:
         terms['air_time'] = 3.0 * air_window.float().sum(-1) * (command[:, :3].norm(dim=-1) > .01).float()
         self.foot_air_time = torch.where(touchdown, torch.zeros_like(self.foot_air_time), self.foot_air_time)
         self.previous_foot_contact.copy_(foot_contact)
+        # Upstream uses the terrain-height ray value. On the flat Genesis
+        # plane, foot link z is mathematically equivalent to that height.
         swing = ~foot_contact
         clearance_error = (foot_pos[..., 2] - .02).abs()
-        terms['foot_clearance'] = -.1 * (clearance_error * swing).mean(-1)
-        terms['foot_swing_height'] = -.1 * (clearance_error * swing).mean(-1)
+        active = (command[:, :2].norm(dim=-1) + command[:, 2].abs() > .01).float()
+        terms['foot_clearance'] = -2.0 * (clearance_error * torch.linalg.vector_norm(foot_vel[..., :2], dim=-1)).sum(-1) * active
+        # Track peak swing height and evaluate the error at first contact, as
+        # mjlab's feet_swing_height term does. Contact forces are the Genesis
+        # equivalent of the two-foot contact sensor on flat terrain.
+        self.foot_peak_height = torch.where(swing, torch.maximum(self.foot_peak_height, foot_pos[..., 2]), self.foot_peak_height)
+        first_contact = foot_contact & ~was_contact
+        swing_error = (self.foot_peak_height / .02 - 1.0).square()
+        terms['foot_swing_height'] = -.25 * (swing_error * first_contact.float()).sum(-1) * active
+        self.foot_peak_height = torch.where(first_contact, torch.zeros_like(self.foot_peak_height), self.foot_peak_height)
         terms['foot_slip'] = -.1 * (torch.square(foot_vel[..., :2]).sum(-1) * foot_contact).mean(-1)
         terms['self_collisions'] = -1.0 * (self_collision.float() if self_collision is not None else torch.zeros(n, device=actions.device))
         # Weight is zero upstream in the velocity task, but compute it so this
