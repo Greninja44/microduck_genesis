@@ -8,6 +8,8 @@ dependencies = [
   "genesis-world==1.4.1",
   "torch>=2.8",
   "psutil",
+  # Import name is `bam`; this is the exact upstream MicroDuck actuator source.
+  "better-actuator-models @ git+https://github.com/Rhoban/bam.git@62bd8ce12154340be97e06f7f41a0ca8f116d967",
 ]
 
 [tool.uv]
